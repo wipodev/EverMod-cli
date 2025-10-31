@@ -1,0 +1,15 @@
+[project]
+name = "evermod-cli"
+version = "1.0.0"
+description = "EverMod CLI — Modular Forge modding workspace manager"
+authors = [{ name = "WipoDev", email = "wipodev28@gmail.com" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+evermod = "evermod.main:main"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"

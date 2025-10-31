@@ -1,0 +1,6 @@
+{
+  "name": "EverMod CLI",
+  "version": "1.0.0",
+  "compatibleFramework": "1.0.0",
+  "description": "Command-line tool for managing modular Forge modding environments with EverMod."
+}
