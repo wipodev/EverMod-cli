@@ -1,6 +1,7 @@
 import json, shutil, re
 from pathlib import Path
 from evermod.utils.paths import get_templates_dir, get_versions_file
+from evermod.utils.gradle_tools import refresh_environment
 
 def run(name: str, mc_version: str, target_path: str = "."):
     cwd = Path(".").resolve()  # Donde se ejecuta el comando
@@ -91,3 +92,4 @@ def run(name: str, mc_version: str, target_path: str = "."):
     print(f"✅ Mod '{name}' created successfully for Minecraft {mc_version} (Forge {version_info['forge_version']})")
     print(f"📂 Location: {mod_dir}")
     print(f"🏗️ Workspace mode: {'ON' if is_workspace else 'OFF'}")
+    refresh_environment()

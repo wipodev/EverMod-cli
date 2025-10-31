@@ -8,6 +8,7 @@ if not getattr(sys, 'frozen', False):
         sys.path.insert(0, src_path)
 
 from evermod.commands import create, evermix, add, update, version
+from evermod.utils import gradle_tools
 
 def main():
     parser = argparse.ArgumentParser(
@@ -20,7 +21,6 @@ def main():
         action="store_true",
         help="Show EverMod CLI, framework, and templates version information"
     )
-
 
     subparsers = parser.add_subparsers(dest="command")
 
@@ -45,6 +45,9 @@ def main():
     update_parser.add_argument("--force", action="store_true", help="Force update even if versions are the same")
     update_parser.add_argument("--silent", action="store_true", help="Run update in silent mode (no prompts)")
 
+    # refresh
+    subparsers.add_parser("refresh", help="Refresh Gradle dependencies and reindex Java environment")
+
 
     args = parser.parse_args()
 
@@ -57,6 +60,7 @@ def main():
         case "evermix": evermix.run(args.target)
         case "add": add.run(args.user, args.name, args.target)
         case "update": update.run(args.force, args.silent)
+        case "refresh": gradle_tools.refresh_environment()
         case _: parser.print_help()
 
 if __name__ == "__main__":

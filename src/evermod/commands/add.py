@@ -1,5 +1,6 @@
 import subprocess
 from pathlib import Path
+from evermod.utils.gradle_tools import refresh_environment
 
 def run(user: str, name: str, target_path: str = "."):
     cwd = Path(".").resolve()  # workspace root
@@ -37,3 +38,4 @@ def run(user: str, name: str, target_path: str = "."):
             print(f"ℹ️  Submodule '{name}' already registered in workspace.")
 
     print(f"🏗️ Workspace mode: {'ON' if settings_path.exists() else 'OFF'}")
+    refresh_environment()
