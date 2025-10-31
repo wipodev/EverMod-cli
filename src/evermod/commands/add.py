@@ -14,7 +14,8 @@ def run(user: str, name: str, target_path: str = "."):
         return
 
     try:
-        subprocess.run(["git", "submodule", "add", repo_url, str(dest)], check=True)
+        relative_dest = str(dest.relative_to(cwd))
+        subprocess.run(["git", "submodule", "add", repo_url, relative_dest], check=True)
         print(f"✅ Submodule '{name}' added successfully.")
     except subprocess.CalledProcessError:
         print(f"❌ Failed to add submodule '{name}'.")
