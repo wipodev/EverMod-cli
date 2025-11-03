@@ -1,76 +1,184 @@
 import os
-import sys
+import json
 from pathlib import Path
 from xml.sax.saxutils import escape
+import pathspec
+import re
+
+# ─────────────────────────────────────────────
+# ⚙️  Utility functions
+# ─────────────────────────────────────────────
+
+def load_gitignore(base_path: Path):
+    """Load patterns from .gitignore and compile with pathspec."""
+    gitignore_path = base_path / ".gitignore"
+    if not gitignore_path.exists():
+        return None
+    lines = gitignore_path.read_text(encoding="utf-8").splitlines()
+    return pathspec.PathSpec.from_lines("gitwildmatch", lines)
+
+def load_config(base_path: Path) -> dict:
+    """Load EverMix config file (evermix.config.json) or return defaults."""
+    config_path = base_path / "evermix.config.json"
+    defaults = {
+        "exclude": [
+            ".git",
+            ".gitignore",
+            ".gitattributes",
+            "build",
+            "dist",
+            "__pycache__",
+            "__init__.py",
+            "*.log",
+            "*.zip",
+            ".idea",
+            ".vscode"
+        ],
+        "use_gitignore": True,
+        "output": None,
+        "follow_symlinks": False
+    }
+
+    if config_path.exists():
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            defaults.update(data)
+        except Exception as e:
+            print(f"⚠️  Could not parse evermix.config.json: {e}")
+    return defaults
+
+def is_binary_file(path: Path) -> bool:
+    """Detect if a file is binary by inspecting its first bytes."""
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(1024)
+        if not chunk:
+            return False
+        if b"\0" in chunk:
+            return True
+        text_chars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)))
+        non_text = chunk.translate(None, text_chars)
+        return len(non_text) / len(chunk) > 0.2
+    except Exception:
+        return False
+
+def count_tokens(text: str) -> int:
+    """Estimate tokens by splitting words and symbols (approximation)."""
+    return len(re.findall(r"\w+|[^\w\s]", text))
+
+# ─────────────────────────────────────────────
+# 🧩  Main command
+# ─────────────────────────────────────────────
 
 def run(project_path: str = "."):
     base_path = Path(project_path).resolve()
     project_name = base_path.name
-    src_path = base_path / "src"
+    config = load_config(base_path)
 
-    if not src_path.exists():
-        print(f"❌ 'src' folder not found in {base_path}")
-        return
+    gitignore_spec = load_gitignore(base_path) if config.get("use_gitignore", True) else None
+    exclude_patterns = config["exclude"]
+    output_name = config["output"] or f"{project_name}-evermix.xml"
+    output_file = base_path / output_name
+    follow_symlinks = config.get("follow_symlinks", False)
 
-    output_file = base_path / f"{project_name}-evermix.xml"
-    all_files = []
+    # helper: exclusion rules
+    def should_exclude(path: Path) -> bool:
+        from fnmatch import fnmatch
+        rel = str(path.relative_to(base_path))
+        if gitignore_spec and gitignore_spec.match_file(rel):
+            return True
+        for pattern in exclude_patterns:
+            if fnmatch(path.name, pattern) or fnmatch(rel, pattern):
+                return True
+        return False
 
-    # Collect all source files inside src/
-    for root, _, files in os.walk(src_path):
+    # ─────────────────────────────
+    #  Scan files
+    # ─────────────────────────────
+    print(f"📦 Generating EverMix for {project_name} ...\n")
+
+    all_files, binary_files, total_chars, total_tokens = [], [], 0, 0
+
+    for root, dirs, files in os.walk(base_path, followlinks=follow_symlinks):
+        root_path = Path(root)
+        dirs[:] = [d for d in dirs if not should_exclude(root_path / d)]
+
         for file in files:
-            if file.endswith((".java", ".kt", ".py", ".json", ".xml", ".gradle", ".md")):
-                full_path = Path(root) / file
-                all_files.append(full_path)
+            full_path = root_path / file
+            if should_exclude(full_path):
+                continue
+            all_files.append(full_path)
 
     if not all_files:
-        print("⚠️  No relevant files found inside 'src/'.")
+        print("⚠️  No files found after filtering.")
         return
 
-    print(f"🧩 Generating EverMix for '{project_name}' with {len(all_files)} files...")
+    print(f"🧩 Found {len(all_files)} total files. Processing...\n")
 
     with open(output_file, "w", encoding="utf-8") as out:
-        # XML header
-        out.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-        out.write("<project>\n")
+        out.write('<?xml version="1.0" encoding="UTF-8"?>\n<project>\n')
 
-        # ===== CONTEXT SECTION =====
         intro = f"""
   <context>
-    This XML file was automatically generated by EverMix, the source consolidation system
-    of the EverMod framework.
-
-    It contains the full content of the project "{project_name}", which is a Minecraft mod
-    developed in Java using Forge, structured according to the EverMod framework conventions.
-
-    The purpose of this file is to provide context to an artificial intelligence system
-    for analysis, documentation, or refactoring tasks.
-
-    Each <file> block below contains the complete source content of one file located
-    under the project's 'src/' directory.
+    This XML file was automatically generated by EverMix for project "{project_name}".
+    It consolidates all project files for analysis, documentation, and AI-assisted refactoring.
+    Binary files are listed in <structure> but excluded from <file> blocks.
   </context>
 """
         out.write(intro)
-
-        # ===== STRUCTURE SECTION =====
         out.write("  <structure>\n")
+
         for path in all_files:
-            rel_path = path.relative_to(base_path)
-            out.write(f"    <path>{rel_path}</path>\n")
+            rel = path.relative_to(base_path)
+            if is_binary_file(path):
+                out.write(f'    <path type="binary">{rel}</path>\n')
+                binary_files.append(rel)
+            else:
+                out.write(f"    <path>{rel}</path>\n")
         out.write("  </structure>\n\n")
 
-        # ===== FILE CONTENT SECTION =====
+        # file contents
         for path in all_files:
-            rel_path = path.relative_to(base_path)
+            rel = path.relative_to(base_path)
+            if rel in binary_files:
+                continue
             try:
                 content = path.read_text(encoding="utf-8", errors="ignore")
+                total_chars += len(content)
+                total_tokens += count_tokens(content)
             except Exception as e:
                 print(f"⚠️  Could not read {path}: {e}")
                 continue
-            escaped_content = escape(content)
-            out.write(f'  <file name="{rel_path}">\n')
-            out.write(f"{escaped_content}\n")
-            out.write("  </file>\n")
+
+            out.write(f'  <file name="{rel}">\n{escape(content)}\n  </file>\n')
 
         out.write("</project>\n")
 
-    print(f"✅ EverMix file generated successfully: {output_file}")
+    # ─────────────────────────────
+    #  Output summary
+    # ─────────────────────────────
+    YELLOW = "\033[33m"
+    GREEN = "\033[92m"
+    RESET = "\033[0m"
+
+    print("✔ Packing completed successfully!\n")
+
+    if binary_files:
+        print("📄 Binary Files Detected:")
+        print("─────────────────────────")
+        print(f"{YELLOW}{len(binary_files)} files detected as binary by content inspection:{RESET}")
+        for i, f in enumerate(binary_files, 1):
+            print(f"{i}. {f}")
+        print()
+        print(f"{YELLOW}These files have been excluded from the output.{RESET}")
+        print(f"{YELLOW}Please review them if you expected them to contain text content.{RESET}\n")
+
+    print("📊 Pack Summary:")
+    print("────────────────")
+    print(f"  Total Files: {len(all_files)} files")
+    print(f" Total Tokens: {total_tokens:,} tokens")
+    print(f"  Total Chars: {total_chars:,} chars")
+    print(f"       Output: {output_file.name}")
+    print(f"     Security: ✔ No suspicious files detected\n")
+    print(f"{GREEN}🎉 All Done!{RESET}")
+    print("Your repository has been successfully packed.")
