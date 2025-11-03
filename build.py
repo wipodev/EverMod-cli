@@ -1,5 +1,7 @@
 import subprocess, os, sys, shutil, json, re
 from pathlib import Path
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 
 # =============================================
 # 🧩 EverMod CLI — Build Automation Script
@@ -21,6 +23,39 @@ SETUP_ISS = ROOT / "setup.iss"
 MANIFEST = ROOT / "manifest.json"
 PYPROJECT = ROOT / "pyproject.toml"
 INNO_SETUP_EXE = Path(APPDATA) / "Programs/Inno Setup 6/ISCC.exe"
+
+# -----------------------------------------
+# 🔐 Optional key generation before build
+# -----------------------------------------
+def generate_keys():
+    """Run generate_keys.py before building."""
+    print("\n🔐 Generating EverMod RSA keys...\n")
+
+    private_path = Path.home() / ".evermod" / "keys" / "private.pem"
+    public_path = Path("src/evermod/auth/keys/evermod_public.pem")
+    public_path.parent.mkdir(parents=True, exist_ok=True)
+    private_path.parent.mkdir(parents=True, exist_ok=True)
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    with open(private_path, "wb") as f:
+        f.write(
+            private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+        )
+
+    public_key = private_key.public_key()
+    with open(public_path, "wb") as f:
+        f.write(
+            public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+        )
+
+    print(f"✅ Claves generadas correctamente:\n - {private_path}\n - {public_path}")
 
 # -----------------------------------------
 # 🧠 Utilities
@@ -171,6 +206,9 @@ def build_inno_setup():
 
 def main():
     print("🧩 EverMod CLI — Build Automation\n")
+    args = [a.lower() for a in sys.argv[1:]]
+    if "--keys" in args or "keys" in args or "-k" in args:
+        generate_keys()
     clean_previous_builds()
     build_pyinstaller()
     build_inno_setup()

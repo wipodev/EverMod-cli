@@ -92,9 +92,9 @@ def run():
     is_workspace = settings_path.exists()
 
     # === Templates ===
-    build_tpl = templates_dir / "build.gradle.j2"
-    props_tpl = templates_dir / "gradle.properties.j2"
-    main_tpl = templates_dir / "MainMod.java.j2"
+    build_tpl = templates_dir / "template.build.gradle.j2"
+    props_tpl = templates_dir / "template.gradle.properties.j2"
+    main_tpl = templates_dir / "template.MainMod.java.j2"
 
     # === Render context ===
     context = version_info.copy()
@@ -142,7 +142,7 @@ def run():
             (".gitattributes", mod_dir / ".gitattributes"),
             ("gradlew", mod_dir / "gradlew"),
             ("gradlew.bat", mod_dir / "gradlew.bat"),
-            ("settings.gradle", mod_dir / "settings.gradle"),
+            ("template.settings.gradle.j2", mod_dir / "settings.gradle"),
             ("gradle/wrapper/gradle-wrapper.jar", gradle_dir / "gradle-wrapper.jar"),
             ("gradle/wrapper/gradle-wrapper.properties", gradle_dir / "gradle-wrapper.properties"),
         ]:

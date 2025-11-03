@@ -7,7 +7,7 @@ if not getattr(sys, 'frozen', False):
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
 
-from evermod.commands import create, evermix, add, update, version
+from evermod.commands import create, evermix, add, update, version, release
 from evermod.utils import gradle_tools
 
 def main():
@@ -45,6 +45,17 @@ def main():
     # refresh
     subparsers.add_parser("refresh", help="Refresh Gradle dependencies and reindex Java environment")
 
+    # release (internal, hidden)
+    release_parser = subparsers.add_parser("release", help=argparse.SUPPRESS)
+    release_parser.add_argument("release_tag", help=argparse.SUPPRESS)
+    release_parser.add_argument("--publish", action="store_true", help=argparse.SUPPRESS)
+    release_parser.add_argument("--auto", action="store_true", help=argparse.SUPPRESS)
+    release_parser.add_argument("target", nargs="?", default=".", help=argparse.SUPPRESS)
+    
+    # --- Ocultar el comando 'release' de la ayuda ---
+    for action in list(subparsers._choices_actions):
+        if getattr(action, "dest", None) == "release":
+            subparsers._choices_actions.remove(action)
 
     args = parser.parse_args()
 
@@ -58,6 +69,7 @@ def main():
         case "add": add.run(args.user, args.name, args.target)
         case "update": update.run(args.force, args.silent)
         case "refresh": gradle_tools.refresh_environment()
+        case "release": release.run(args.release_tag, args.publish, args.auto, args.target)
         case _: parser.print_help()
 
 if __name__ == "__main__":
