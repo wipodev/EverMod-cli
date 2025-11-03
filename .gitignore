@@ -6,3 +6,6 @@ Output/
 *.log
 *.pyc
 *.pem
+
+# Evermod
+*evermix.xml
