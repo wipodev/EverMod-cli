@@ -1,81 +1,124 @@
-import json, shutil, re
+import json, re, shutil
 from pathlib import Path
+from jinja2 import Template
 from evermod.utils.paths import get_templates_dir, get_versions_file
 from evermod.utils.gradle_tools import refresh_environment
 
-def run(name: str, mc_version: str, target_path: str = "."):
-    cwd = Path(".").resolve()  # Donde se ejecuta el comando
-    target_base = Path(target_path).resolve()  # Donde se creará el mod
-    templates = get_templates_dir()
+def _sanitize_string(s: str) -> str:
+    """Sanitize a string to be used as mod ID or similar identifiers."""
+    return re.sub(r'[^a-z0-9_]', '_', s.lower().strip().replace(" ", "_"))
+
+def _sanitize_package(s: str) -> str:
+    """Sanitize a string for use as a Java package (keep dots)."""
+    parts = s.lower().strip().replace(" ", "_").split(".")
+    return ".".join(re.sub(r'[^a-z0-9_]', '_', p) for p in parts if p)
+
+def _ask(prompt, default=None):
+    """Input helper with default value"""
+    value = input(f"{prompt} [{default}]: ").strip()
+    return value or default
+
+def run():
+    """Interactive mod creation wizard"""
+    print("🧩 EverMod — Mod creation wizard")
+    print("--------------------------------")
+
+    # === Load versions file ===
     versions_path = get_versions_file()
-
     if not versions_path.exists():
-        print("❌ 'versions.json' not found in templatesMDK/")
+        print("❌ 'versions.json' not found in templates/")
         return
-
     versions = json.loads(versions_path.read_text(encoding="utf-8"))
 
-    if mc_version not in versions:
-        print(f"❌ Unsupported Minecraft version: {mc_version}")
-        print("Available versions:")
-        for v in versions.keys():
-            print(f"  - Minecraft {v}")
-        print()
-        print("💡 Usage: evermod create <mod_name> [minecraft_version] [target_path]")
-        print("💡 Example: evermod create SilentMask 1.19.2 ./mods")
-        return
+    # === Ask for mod name ===
+    mod_name = _ask("Mod name", "NewMod")
 
-    # Detect workspace in the current directory (not in the target path)
+    # === Generate mod_id suggestion ===
+    suggested_modid = _sanitize_string(mod_name)
+    mod_id = _ask("Mod ID", suggested_modid)
+    mod_id = _sanitize_string(mod_id)
+
+    # === Ask Minecraft version ===
+    print("\nAvailable Minecraft versions:")
+    for v in versions.keys():
+        print(f" - {v}")
+    mc_version = _ask("Select Minecraft version", list(versions.keys())[-1])
+
+    if mc_version not in versions:
+        print(f"❌ Unsupported version: {mc_version}")
+        return
+    version_info = versions[mc_version]
+
+    # === Ask for author and group ===
+    author = _ask("Author name", "WipoDev")
+
+    # === Suggest package name ===
+    safe_author = _sanitize_string(author)
+    package_default = f"net.{safe_author}.{mod_id}"
+    package_response = _ask("Package name", package_default).strip()
+    package_response = _sanitize_package(package_response)
+    package_name = package_response
+    package_parts = package_response.split(".")
+
+    # === Target folder ===
+    target_base = Path(_ask("Target directory", ".")).resolve()
+    mod_dir = target_base / mod_name
+    if mod_dir.exists():
+        print(f"⚠️ Folder '{mod_name}' already exists in {target_base}")
+        return
+    mod_dir.mkdir(parents=True, exist_ok=True)
+
+    # === Create src structure ===
+    src_main_java = mod_dir / "src" / "main" / "java" / Path(*package_parts)
+    src_main_resources = mod_dir / "src" / "main" / "resources"
+    src_main_metainf = mod_dir / "src" / "main" / "resources" / "META-INF"
+    src_main_java.mkdir(parents=True, exist_ok=True)
+    src_main_resources.mkdir(parents=True, exist_ok=True)
+    src_main_metainf.mkdir(parents=True, exist_ok=True)
+    templates_dir = get_templates_dir()
+
+    # === Copy template files ===
+    for tpl_file, dst_file in [
+        ("mods.toml", src_main_resources / "mods.toml"),
+        ("pack.mcmeta", src_main_metainf / "pack.mcmeta"),
+        ("LICENSE.txt", mod_dir / "LICENSE.txt"),
+    ]:
+        tpl_path = templates_dir / tpl_file
+        shutil.copy2(tpl_path, dst_file)
+
+    # === Detect workspace (settings.gradle en el cwd) ===
+    cwd = Path(".").resolve()
     settings_path = cwd / "settings.gradle"
     is_workspace = settings_path.exists()
 
-    mod_dir = target_base / name
-    if mod_dir.exists():
-        print(f"⚠️  A folder named '{name}' already exists in {target_base}")
-        return
+    # === Templates ===
+    build_tpl = templates_dir / "build.gradle.j2"
+    props_tpl = templates_dir / "gradle.properties.j2"
+    main_tpl = templates_dir / "MainMod.java.j2"
 
-    mod_dir.mkdir(parents=True, exist_ok=True)
-    version_info = versions[mc_version]
+    # === Render context ===
+    context = version_info.copy()
+    context.update({
+        "minecraft_version": mc_version,
+        "mod_id": mod_id,
+        "mod_group": safe_author,
+        "mod_name": mod_name,
+        "mod_authors": author,
+        "package_name": package_name,
+    })
 
-    shutil.copy(templates / version_info["template"], mod_dir / "build.gradle")
-    shutil.copy(templates / "gradle.properties.template", mod_dir / "gradle.properties")
+    # === Render templates ===
+    for tpl, output in [
+        (build_tpl, mod_dir / "build.gradle"),
+        (props_tpl, mod_dir / "gradle.properties"),
+        (main_tpl, src_main_java / "MainMod.java"),
+    ]:
+        with open(tpl, encoding="utf-8") as f:
+            t = Template(f.read())
+        result = t.render(context)
+        output.write_text(result, encoding="utf-8")
 
-    properties_path = mod_dir / "gradle.properties"
-
-    # === Detect Forge systemProp configuration ===
-    major, minor, patch = (mc_version.split(".") + ["0", "0"])[:3]
-    use_system_prop = False
-    if major == "1" and int(minor) >= 22:
-        use_system_prop = True
-    elif major == "1" and minor == "21" and int(patch) >= 4:
-        use_system_prop = True
-
-    sys_block = ""
-    if use_system_prop:
-        sys_block = (
-            "\n\n# Gradle recompilation settings\n"
-            "systemProp.net.minecraftforge.gradle.repo.recompile.fork=true\n"
-            "systemProp.net.minecraftforge.gradle.repo.recompile.fork.args=-Xmx5G\n\n"
-            "# Disable automatic repository injection by ForgeGradle\n"
-            "systemProp.net.minecraftforge.gradle.repo.attach=false\n\n"
-        )
-
-    text = properties_path.read_text(encoding="utf-8")
-
-    # Replace markers
-    text = re.sub(r"\[systemProp\]", sys_block, text)
-    replacements = {
-        r"\[mcv\]": mc_version,
-        r"\[mcvr\]": version_info["minecraft_version_range"],
-        r"\[fv\]": version_info["forge_version"],
-        r"\[fm\]": version_info["forge_version_mayor"],
-        r"\[mid\]": name,
-    }
-    for k, v in replacements.items():
-        text = re.sub(k, v, text)
-    properties_path.write_text(text, encoding="utf-8")
-
-    # Register mod in workspace if detected
+    # === Registrar en workspace si aplica ===
     if is_workspace:
         relative_path = mod_dir.relative_to(cwd)
         include_path = str(relative_path).replace("\\", ":").replace("/", ":")
@@ -85,11 +128,31 @@ def run(name: str, mc_version: str, target_path: str = "."):
         if include_line not in content:
             with open(settings_path, "a", encoding="utf-8") as f:
                 f.write(f"\n{include_line}\n")
-            print(f"🧩 Mod '{name}' registered in workspace settings.gradle")
+            print(f"🧩 Mod '{mod_name}' registered in workspace settings.gradle")
         else:
-            print(f"ℹ️  Mod '{name}' is already registered in workspace.")
+            print(f"ℹ️ Mod '{mod_name}' is already registered in workspace.")
+    else:
+        # === create gradle wrapper structure ===
+        gradle_dir = mod_dir / "gradle" / "wrapper"
+        gradle_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"✅ Mod '{name}' created successfully for Minecraft {mc_version} (Forge {version_info['forge_version']})")
+        # === Copy template files ===
+        for tpl_file, dst_file in [
+            (".gitignore", mod_dir / ".gitignore"),
+            (".gitattributes", mod_dir / ".gitattributes"),
+            ("gradlew", mod_dir / "gradlew"),
+            ("gradlew.bat", mod_dir / "gradlew.bat"),
+            ("settings.gradle", mod_dir / "settings.gradle"),
+            ("gradle/wrapper/gradle-wrapper.jar", gradle_dir / "gradle-wrapper.jar"),
+            ("gradle/wrapper/gradle-wrapper.properties", gradle_dir / "gradle-wrapper.properties"),
+        ]:
+            tpl_path = templates_dir / tpl_file
+            shutil.copy2(tpl_path, dst_file)
+
+    print(f"\n✅ Mod '{mod_name}' created successfully!")
+    print(f"📦 Minecraft {mc_version} (Forge {version_info['forge_version']})")
     print(f"📂 Location: {mod_dir}")
     print(f"🏗️ Workspace mode: {'ON' if is_workspace else 'OFF'}")
+    print("--------------------------------")
+
     refresh_environment()

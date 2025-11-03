@@ -25,10 +25,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     # create
-    create_parser = subparsers.add_parser("create", help="Create a new mod from a Forge MDK template")
-    create_parser.add_argument("name", nargs="?", default="NewMod", help="Mod name")
-    create_parser.add_argument("mcversion", nargs="?", default="1.19.2", help="Minecraft version")
-    create_parser.add_argument("target", nargs="?", default=".", help="Target directory for mod creation")
+    subparsers.add_parser("create", help="Create a new mod from a Forge MDK template")
 
     # evermix
     evermix_parser = subparsers.add_parser("evermix", help="Generate evermix documentation for mods")
@@ -56,7 +53,7 @@ def main():
       return
 
     match args.command:
-        case "create": create.run(args.name, args.mcversion, args.target)
+        case "create": create.run()
         case "evermix": evermix.run(args.target)
         case "add": add.run(args.user, args.name, args.target)
         case "update": update.run(args.force, args.silent)

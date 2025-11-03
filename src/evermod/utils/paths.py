@@ -14,7 +14,7 @@ def get_global_dir() -> Path:
 
 def get_templates_dir() -> Path:
     """Returns the path to the global Forge templates directory."""
-    templates = get_global_dir() / "templatesMDK"
+    templates = get_global_dir() / "templates"
     templates.mkdir(parents=True, exist_ok=True)
     return templates
 
