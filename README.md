@@ -1,5 +1,9 @@
 # ⚙️ EverMod CLI
 
+<p align="center">
+<img src="./assets/icon.ico" alt="logo" width="50%">
+</p>
+
 **EverMod CLI** is the official command-line tool for the [EverMod Framework](https://github.com/wipodev/EverMod).
 It provides a unified way to **create, organize, and maintain modular Minecraft Forge modding workspaces**.
 
