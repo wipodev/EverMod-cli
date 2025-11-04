@@ -163,9 +163,9 @@ def run(release_tag: str, publish: bool, auto: bool = False, target: str = "."):
     # 🚀 4. Publish release (optional)
     # ------------------------------------------------------------
     if publish:
-        publish_release(release_tag, RELEASE_DIR)
+        publish_release(release_tag, RELEASE_DIR, ROOT)
 
     # --- Create main tag ---
-    create_main_tag(release_tag, auto)
+    create_main_tag(release_tag, auto, ROOT)
 
     print("\n🎉 EverMod release build completed successfully!\n")

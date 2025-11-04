@@ -48,9 +48,9 @@ def main():
     # release (internal, hidden)
     release_parser = subparsers.add_parser("release", help=argparse.SUPPRESS)
     release_parser.add_argument("release_tag", help=argparse.SUPPRESS)
+    release_parser.add_argument("target", nargs="?", default=".", help=argparse.SUPPRESS)
     release_parser.add_argument("--publish", action="store_true", help=argparse.SUPPRESS)
     release_parser.add_argument("--auto", action="store_true", help=argparse.SUPPRESS)
-    release_parser.add_argument("target", nargs="?", default=".", help=argparse.SUPPRESS)
     
     # --- Ocultar el comando 'release' de la ayuda ---
     for action in list(subparsers._choices_actions):

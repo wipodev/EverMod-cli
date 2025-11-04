@@ -73,10 +73,10 @@ def run(force: bool = False, silent: bool = False):
                 print("❌ Failed to clone the repository.")
             return
 
-        remote_templates = tmp_path / "templatesMDK"
+        remote_templates = tmp_path / "templates"
         if not remote_templates.exists():
             if not silent:
-                print("❌ Remote repository does not contain 'templatesMDK' folder.")
+                print("❌ Remote repository does not contain 'templates' folder.")
             return
 
         if templates_dir.exists():
