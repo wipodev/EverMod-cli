@@ -41,7 +41,7 @@ def run():
         return
     mod_dir.mkdir(parents=True, exist_ok=True)
 
-    templates_dir, src_main_java, src_main_java_mod = create_mod_structure(mod_dir, package_parts)
+    templates_dir, src_main_java, src_main_java_mod, src_main_resources = create_mod_structure(mod_dir, package_parts)
 
     context = version_info.copy()
     context.update({
@@ -57,6 +57,7 @@ def run():
         (templates_dir / "template.build.gradle.j2", mod_dir / "build.gradle"),
         (templates_dir / "template.gradle.properties.j2", mod_dir / "gradle.properties"),
         (templates_dir / "template.MainMod.java.j2", src_main_java_mod / "MainMod.java"),
+        (templates_dir / "template.pack.mcmeta.j2", src_main_resources / "pack.mcmeta"),
     ]:
         render_template(tpl, context, output)
 

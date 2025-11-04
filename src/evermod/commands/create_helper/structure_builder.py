@@ -16,10 +16,9 @@ def create_mod_structure(mod_dir: Path, package_parts: list[str]):
     templates_dir = get_templates_dir()
 
     for tpl_file, dst_file in [
-        ("mods.toml", src_main_resources / "mods.toml"),
-        ("pack.mcmeta", src_main_metainf / "pack.mcmeta"),
+        ("mods.toml", src_main_metainf / "mods.toml"),
         ("LICENSE.txt", mod_dir / "LICENSE.txt"),
     ]:
         shutil.copy2(templates_dir / tpl_file, dst_file)
 
-    return templates_dir, src_main_java, src_main_java_mod
+    return templates_dir, src_main_java, src_main_java_mod, src_main_resources
